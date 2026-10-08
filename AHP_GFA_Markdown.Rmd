@@ -2,31 +2,47 @@
 title: "Utilizing AHP for Geospatial Flood Analysis"
 author: "Mikael Syed"
 date: "2025-11-23"
-output: 
+knit: (function(input, ...) rmarkdown::render(input, output_file = "index.html", envir = globalenv()))
+output:
   html_document:
-
+    theme:
+      version: 5
+      preset: bootstrap
+      bg: "#f9f5d7"
+      fg: "#242424"
+      primary: "#d62221"
+      base_font: !expr bslib::font_collection("Helvetica Neue", "Helvetica", "Arial", "sans-serif")
+      heading_font: !expr bslib::font_collection("Helvetica Neue", "Helvetica", "Arial", "sans-serif")
+      code_font: !expr bslib::font_collection("SF Mono", "Menlo", "Consolas", "monospace")
+    css: assets/report-theme.css
+    includes:
+      in_header: assets/theme-toggle.html
+    highlight: tango
     toc: yes
     toc_float:
       collapsed: true
 ---
 
 ```{r setup, include=FALSE}
+source("assets/theme_mikael.R")
+ms_knitr_setup()
 knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
 ```
 
 ## Preface
 
-This is a project worked on by me during my final year (2025) at UofT in GGR494 (Special Topics in GIS). In a nutshell, I had conducted a 
+This is a project worked on by me during my final year (2025) at UofT in GGR494 (Special Topics in GIS).
 
 ## Introduction
 
-Under the framework of Multi-Criteria Decision Making (MCDM), sits Analytic Hierarchy Process (AHP). Which is a process not just utilized in management, business, and government, but has been used for geospatial flood analysis (GFA) in modern research. How AHP is used for GFA is determining assigned, weighted values to variables that would affect a locations susceptibility to flooding.
+Under the framework of Multi-Criteria Decision Making (MCDM), sits Analytic Hierarchy Process (AHP). Which is a process not just utilized in management, business, and government, but has been used for geospatial flood analysis (GFA) in modern research. How AHP is used for GFA is determining assigned, weighted values to variables that would affect a location's susceptibility to flooding.
 
 ### Example
 
-In a more broader sense, AHP is really a decision making process for when you must compare multiple variables relatively against each other; where some variables are more important than others, to to make a decision based the output of your process. Let's be more specific, if you had to choose between two preferred pies, apple pie (call this option A) and blueberry pie (option B). You would choose one or the other, in this case, you choose apple pie (A) and make the decision to hold option A as being more valuable than option B.
+In a more broader sense, AHP is really a decision making process for when you must compare multiple variables relatively against each other; where some variables are more important than others, to make a decision based the output of your process. Let's be more specific, if you had to choose between two preferred pies, apple pie (call this option A) and blueberry pie (option B). You would choose one or the other, in this case, you choose apple pie (A) and make the decision to hold option A as being more valuable than option B.
 
-Seems easy, right? But what if we added two more options? Pecan pie (option C) and pumpkin pie (option D). All of a sudden you now have to evaluate all permutations of every single comparison. "Well I do like A over B but I think C is better than A but I'll always take B over D..." is how most though processes would probably go after. 
+Seems easy, right? But what if we added two more options? Pecan pie (option C) and pumpkin pie (option D). All of a sudden you now have to evaluate all permutations of every single comparison. "Well I do like A over B but I think C is better than A but I'll always take B over D..." is how most thought processes would probably go after. 
 
 AHP is now used to determine (or compute) these permutations and derive a model in which you can now base decisions off of. So let's now move on to the application of it in flood analysis.
 
@@ -36,7 +52,7 @@ What I have determined to be the most important variables in assessing flood sus
 
 ### Limitations for your own processes
 
-However, if it were up to me, I would have chosen other factors instead. A limitation of this project was the lack of geospatial data to be utilized that was available or free. If you are familiar with flood analysis or GIS hydro-work, then you could maybe pick out a few glaring with this choice of variables.
+However, if it were up to me, I would have chosen other factors instead. A limitation of this project was the lack of geospatial data to be utilized that was available or free. If you are familiar with flood analysis or GIS hydro-work, then you could maybe pick out a few glaring issues with this choice of variables.
 
 It's mainly that the variables are redundant to the model (elevation, slope are included inside of TWI). Would it make sense to evaluate slope and elevation as other variables in AHP if it's already a component of TWI? Yes and no; if you are evaluating elevation or slope by itself for a different reason, then it would be okay. In this case, it was done due to no other variables being able to be chosen. 
 
@@ -58,22 +74,26 @@ PCDM <- matrix(c(
 colnames(PCDM) <- rownames(PCDM) <- c("TWI", "Elevation", "Slope", "Floodplain")
 ```
 
-It may not show it in the code, but the matrix table should look like this:
+The matrix reads row against column: a 3 in the TWI row under Elevation means TWI is judged moderately more important than Elevation.
 
-               | TWI | Elevation | Slope | Floodplain |
-    TWI        |  1  |     3     |   5   |      7     |
-    Elevation  | 1/3 |     1     |   4   |      6     |
-    Slope      | 1/5 |    1/4    |   1   |      3     |
-    Floodplain | 1/7 |    1/6    |  1/3  |      1     |
+```{r PCDM-table, echo=FALSE}
+as_fraction <- function(x) ifelse(x >= 1, as.character(round(x)), paste0("1/", round(1 / x)))
+kable(apply(PCDM, c(1, 2), as_fraction), align = "c",
+      caption = "Pairwise comparison matrix (Saaty scale)")
+```
 
 Diagonally, a rating of 1 is set as it would be comparing each variable against itself.
 
 ## Normalized Pairwise Comparison Decision Matrix
 
-Next, the scores must be normalized. This would allow us to comute the relative priority (weight) of each variable. 
+Next, the scores must be normalized. This would allow us to compute the relative priority (weight) of each variable.
 
 ```{r NPCDM}
 PCDM_norm <- sweep(PCDM, 2, colSums(PCDM), FUN = "/")
+```
+
+```{r NPCDM-table, echo=FALSE}
+kable(PCDM_norm, digits = 3, align = "c", caption = "Normalized matrix (each column sums to 1)")
 ```
 
 ## Average Weights Criteria
@@ -83,6 +103,17 @@ Determining the average weight of each variable occurs now, you would take an av
 ```{r AWC}
 weights <- rowMeans(PCDM_norm)
 weights
+```
+
+```{r weights-chart, echo=FALSE, fig.height=3.2}
+weights_df <- data.frame(criterion = factor(names(weights), levels = rev(names(weights))), weight = weights)
+ggplot(weights_df, aes(x = weight, y = criterion)) +
+  geom_col(fill = ms_colours[["orange"]], width = 0.6) +
+  geom_text(aes(label = sprintf("%.1f%%", weight * 100)), hjust = -0.15, colour = ms_text, size = 4) +
+  scale_x_continuous(labels = scales::percent, expand = expansion(mult = c(0, 0.15))) +
+  labs(title = "Criterion weights", x = NULL, y = NULL) +
+  theme_mikael() +
+  theme(panel.grid.major.y = element_blank())
 ```
 
 ## Overall Score (Weights Sum Vector)
@@ -144,15 +175,13 @@ The resulting Consistency Ratio (CR ≈ 0.064) is well below the commonly accept
 The table below summarizes the entire consistency analysis. This acts as a final check before applying the weights to raster data in a geospatial flood analysis workflow.
 
 ```{r, echo=FALSE}
-cat(
-  "AHP Consistency Table\n",
-  "-------------------------\n",
-  "Lambda Max (λmax):        ", lambda_max, "\n",
-  "n (number of criteria):   ", n, "\n",
-  "Random Index (RI):        ", RI, "\n",
-  "Consistency Index (CI):   ", CI, "\n",
-  "Consistency Ratio (CR):   ", CR, "\n",
-  sep = ""
+kable(
+  data.frame(
+    Measure = c("Lambda max (λmax)", "n (number of criteria)", "Random Index (RI)",
+                "Consistency Index (CI)", "Consistency Ratio (CR)"),
+    Value = c(sprintf("%.3f", lambda_max), n, sprintf("%.2f", RI), sprintf("%.3f", CI), sprintf("%.3f", CR))
+  ),
+  align = c("l", "r"), caption = "AHP consistency table (CR below 0.10 is acceptable)"
 )
 ```
 This confirms that the AHP structure used in this project is valid, consistent, and suitable for integrating into the final weighted overlay process for flood susceptibility mapping.
